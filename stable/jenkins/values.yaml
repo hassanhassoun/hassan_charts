@@ -11,7 +11,7 @@
 
 # For FQDN resolving of the master service. Change this value to match your existing configuration.
 # ref: https://github.com/kubernetes/dns/blob/master/docs/specification.md
-clusterZone: "cluster.local"
+clusterZone: "hassanhassoun.com"
 
 master:
   httpsKeyStore:
@@ -127,7 +127,7 @@ master:
   # jenkinsOpts: ""
   # jenkinsUrl: ""
   # If you set this prefix and use ingress controller then you might want to set the ingress path below
-  # jenkinsUriPrefix: "/jenkins"
+  jenkinsUriPrefix: "/"
   # Enable pod security context (must be `true` if runAsUser or fsGroup are set)
   usePodSecurityContext: true
   # Set runAsUser to 1000 to let Jenkins run as non-root user 'jenkins' which exists in 'jenkins/jenkins' docker image.
@@ -149,12 +149,12 @@ master:
   serviceLabels: {}
   #   service.beta.kubernetes.io/aws-load-balancer-backend-protocol: https
   # Put labels on Jenkins master pod
-  podLabels: {}
+  podLabels: {aadpodidbinding: demo}
   # Used to create Ingress record (should used with ServiceType: ClusterIP)
   # nodePort: <to set explicitly, choose port between 30000-32767
   # Enable Kubernetes Liveness and Readiness Probes
   # ~ 2 minutes to allow Jenkins to restart when upgrading plugins. Set ReadinessTimeout to be shorter than LivenessTimeout.
-  healthProbes: true
+  healthProbes: false
   healthProbesLivenessTimeout: 5
   healthProbesReadinessTimeout: 5
   healthProbeLivenessPeriodSeconds: 10
@@ -218,6 +218,9 @@ master:
     - credentials-binding:1.21
     - git:4.2.2
     - configuration-as-code:1.39
+    - azure-ad:1.2.0
+    - azure-credentials:4.0.2
+    - azure-keyvault:2.0
 
   # Enable to always override the installed plugins with the values of 'master.installPlugins' on upgrade or redeployment.
   # overwritePlugins: true
@@ -233,7 +236,27 @@ master:
   #  - "method groovy.json.JsonSlurperClassic parseText java.lang.String"
   #  - "new groovy.json.JsonSlurperClassic"
   # List of groovy init scripts to be executed during Jenkins master start
-  initScripts: []
+  initScripts:
+    globalSecurity : |-
+        import jenkins.model.*
+        import com.microsoft.jenkins.azuread.*
+        import hudson.security.*
+        import org.jenkinsci.plugins.azurekeyvaultplugin.*
+        import com.azure.security.keyvault.secrets.*
+        import com.azure.core.credential.*
+        import com.microsoft.azure.util.AzureCredentials
+        
+        
+        AzureKeyVaultGlobalConfiguration azureKeyVaultGlobalConfiguration = GlobalConfiguration.all().get(AzureKeyVaultGlobalConfiguration.class);       
+        TokenCredential keyVaultCredentials = AzureKeyVaultCredentialRetriever.getCredentialById('msiplus');
+        SecretClient client = AzureCredentials.createKeyVaultClient(keyVaultCredentials, azureKeyVaultGlobalConfiguration.getKeyVaultURL());
+        def instance = Jenkins.getInstance()
+        def realm = new AzureSecurityRealm(client.getSecret('jenkins-client-tenant').getValue(), 
+                                           client.getSecret('jenkins-client-id').getValue(), 
+                                           client.getSecret('jenkins-client-secret').getValue(), 
+                                           0);
+        instance.setSecurityRealm(realm);
+        instance.save();
   #  - |
   #    print 'adding global pipeline libraries, register properties, bootstrap jobs...'
   # Kubernetes secret that contains a 'credentials.xml' for Jenkins
@@ -255,9 +278,23 @@ master:
   # become the content of the configuration yaml file.  The first line after this is a JCasC root element, eg jenkins, credentials,
   # etc.  Best reference is https://<jenkins_url>/configuration-as-code/reference.  The example below creates a welcome message:
   JCasC:
-    enabled: false
+    enabled: true
     defaultConfig: false
-    configScripts: {}
+    configScripts:
+       jenkins: |
+         unclassified:
+           azureKeyVault:
+             credentialID: "msiplus"
+             keyVaultURL: "https://hassanhassoun.vault.azure.net/"
+       credentials: |
+         credentials:
+           system:
+             domainCredentials:
+             - credentials:
+               - azureImds:
+                   azureEnvName: "Azure"
+                   id: "msiplus"
+                   scope: GLOBAL
     # welcome-message: |
     #   jenkins:
     #     systemMessage: Welcome to our CI\CD server.  This Jenkins is configured and managed 'as code'.
@@ -346,21 +383,21 @@ master:
   overwriteJobs: false
 
   ingress:
-    enabled: false
+    enabled: true
     # For Kubernetes v1.14+, use 'networking.k8s.io/v1beta1'
-    apiVersion: "extensions/v1beta1"
+    apiVersion: "networking.k8s.io/v1beta1"
     labels: {}
     annotations: {}
-    # kubernetes.io/ingress.class: nginx
+    kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
     # Set this path to jenkinsUriPrefix above or use annotations to rewrite path
-    # path: "/jenkins"
+    path: "/"
     # configures the hostname e.g. jenkins.example.com
-    hostName:
+    hostName: jenkins.hassanhassoun.com
     tls:
-    # - secretName: jenkins.cluster.local
-    #   hosts:
-    #     - jenkins.cluster.local
+    - secretName: jenkins.hassanhassoun.com
+      hosts:
+        - jenkins.hassanhassoun.com
 
   # If you're running on GKE and need to configure a backendconfig
   # to finish ingress setup, use the following values.
