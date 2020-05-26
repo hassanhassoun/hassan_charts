@@ -11,7 +11,7 @@
 
 # For FQDN resolving of the master service. Change this value to match your existing configuration.
 # ref: https://github.com/kubernetes/dns/blob/master/docs/specification.md
-clusterZone: "hassanhassoun.com"
+clusterZone: "cluster.local"
 
 master:
   httpsKeyStore:
@@ -71,11 +71,12 @@ master:
   imagePullSecretName:
   # Optionally configure lifetime for master-container
   lifecycle:
-  #  postStart:
-  #    exec:
-  #      command:
-  #      - "uname"
-  #      - "-a"
+    postStart:
+      exec:
+        command:
+        - "/bin/sh"
+        - "-c"
+        - "curl -sL https://aka.ms/InstallAzureCLIDeb |  bash"
   numExecutors: 0
   customJenkinsLabels: []
   # configAutoReload requires UseSecurity is set to true:
@@ -149,7 +150,7 @@ master:
   serviceLabels: {}
   #   service.beta.kubernetes.io/aws-load-balancer-backend-protocol: https
   # Put labels on Jenkins master pod
-  podLabels: {aadpodidbinding: demo}
+  podLabels: {aadpodidbinding: jenkins-hassan-testid}
   # Used to create Ingress record (should used with ServiceType: ClusterIP)
   # nodePort: <to set explicitly, choose port between 30000-32767
   # Enable Kubernetes Liveness and Readiness Probes
@@ -221,6 +222,7 @@ master:
     - azure-ad:1.2.0
     - azure-credentials:4.0.2
     - azure-keyvault:2.0
+    - terraform:1.0.10
 
   # Enable to always override the installed plugins with the values of 'master.installPlugins' on upgrade or redeployment.
   # overwritePlugins: true
@@ -285,7 +287,20 @@ master:
          unclassified:
            azureKeyVault:
              credentialID: "msiplus"
-             keyVaultURL: "https://hassanhassoun.vault.azure.net/"
+             keyVaultURL: "https://acnsboxccinfra.vault.azure.net/"
+         tool:
+           git:
+             installations:
+             - home: "git"
+               name: "Default"
+           terraform:
+             installations:
+             - name: "TerraformV12.23"
+               properties:
+               - installSource:
+                   installers:
+                   - terraformInstaller:
+                       id: "0.12.23-linux-amd64"
        credentials: |
          credentials:
            system:
