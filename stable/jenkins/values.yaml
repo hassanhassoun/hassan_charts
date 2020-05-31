@@ -223,6 +223,8 @@ master:
     - azure-credentials:4.0.2
     - azure-keyvault:2.0
     - terraform:1.0.10
+    - job-dsl:1.77
+    - configuration-as-code-support:latest
 
   # Enable to always override the installed plugins with the values of 'master.installPlugins' on upgrade or redeployment.
   # overwritePlugins: true
@@ -283,6 +285,35 @@ master:
     enabled: true
     defaultConfig: false
     configScripts:
+       jobs: |
+         jobs:
+         - script: |
+            freeStyleJob('dsl-seed') {
+              parameters {
+                choiceParam('HA_DR_PURPOSE', ['main','secondary'], 'HA_DR_PURPOSE')
+                choiceParam('PURPOSE', ['tools','abt','common'], 'PURPOSE')
+                choiceParam('PRESTO_ENV', ['dev','sbox','devopsdev','pat','pati','iit','pprod','prod'], 'PRESTO_ENV')
+                stringParam('GIT_PIPELINE_CREDS','hassan-bb-username-pass')
+              }
+              scm {
+                git {
+                  remote { 
+                    url 'https://bitbucket.org/prestotecharch/presto-infra.git'
+                    credentials('hassan-bb-username-pass')
+                  }
+                  branch '*/sbox'
+                  extensions {}
+                }
+              }
+            
+                steps{
+                  dsl {
+                    external('dsl.groovy')
+                    removeAction('DELETE')
+                  } 
+                }
+            
+            }
        jenkins: |
          unclassified:
            azureKeyVault:
@@ -310,6 +341,11 @@ master:
                    azureEnvName: "Azure"
                    id: "msiplus"
                    scope: GLOBAL
+               - usernamePassword:
+                   id: "hassan-bb-username-pass"
+                   password: "{XXXXXXXXXXXXXXXXXXXXXXXXXXX=}"
+                   scope: GLOBAL
+                   username: "bitbucketusername"
     # welcome-message: |
     #   jenkins:
     #     systemMessage: Welcome to our CI\CD server.  This Jenkins is configured and managed 'as code'.
